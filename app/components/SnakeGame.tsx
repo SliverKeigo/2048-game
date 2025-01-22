@@ -5,7 +5,6 @@ import GameScreen from "./GameScreen"
 import ControlPanel from "./ControlPanel"
 import ScoreBoard from "./ScoreBoard"
 import type { GameState, Direction } from "../types/game"
-import { useRouter } from "next/router"
 
 export default function SnakeGame() {
   const [gameState, setGameState] = useState<GameState>({
@@ -44,15 +43,19 @@ export default function SnakeGame() {
       if (gameState.gameStarted) {
         switch (event.key) {
           case "ArrowLeft":
+          case "a":
             if (gameState.direction !== "right") setGameState((prev) => ({ ...prev, direction: "left" }))
             break
           case "ArrowUp":
+          case "w":
             if (gameState.direction !== "down") setGameState((prev) => ({ ...prev, direction: "up" }))
             break
           case "ArrowRight":
+          case "d":
             if (gameState.direction !== "left") setGameState((prev) => ({ ...prev, direction: "right" }))
             break
           case "ArrowDown":
+          case "s":
             if (gameState.direction !== "up") setGameState((prev) => ({ ...prev, direction: "down" }))
             break
         }
@@ -67,7 +70,7 @@ export default function SnakeGame() {
 
   const startGame = () => {
     setGameState((prev) => ({ ...prev, gameStarted: true }))
-    gameInterval.current = setInterval(moveSnake, 50)
+    gameInterval.current = setInterval(moveSnake, 70)
   }
 
   const startAgain = () => {
@@ -104,86 +107,86 @@ export default function SnakeGame() {
 
   const moveSnake = () => {
     setGameState((prev: any) => {
-      const newSnake = [...prev.snake]
-      const head = { ...newSnake[0] }
+        const newSnake = [...prev.snake];
+        const head = { ...newSnake[0] };
 
-      switch (prev.direction) {
-        case "up":
-          head.y--
-          break
-        case "down":
-          head.y++
-          break
-        case "left":
-          head.x--
-          break
-        case "right":
-          head.x++
-          break
-      }
-
-      if (
-        head.x >= 0 &&
-        head.x < 24 &&
-        head.y >= 0 &&
-        head.y < 40 &&
-        !newSnake.find((segment) => segment.x === head.x && segment.y === head.y)
-      ) {
-        newSnake.unshift(head)
-
-        if (head.x === prev.food.x && head.y === prev.food.y) {
-          const newScore = prev.score + 1
-          if (newScore === prev.totalFood) {
-            if (gameInterval.current) clearInterval(gameInterval.current)
-            return {
-              ...prev,
-              snake: newSnake,
-              score: newScore,
-              food: { x: null, y: null },
-              gameOver: true,
-              gameStarted: false,
-            }
-          } else {
-            return {
-              ...prev,
-              snake: newSnake,
-              score: newScore,
-              food: { x: Math.floor(Math.random() * 24), y: Math.floor(Math.random() * 40) },
-            }
-          }
-        } else {
-          newSnake.pop()
-          return { ...prev, snake: newSnake }
+        switch (prev.direction) {
+            case "up":
+                head.y--;
+                break;
+            case "down":
+                head.y++;
+                break;
+            case "left":
+                head.x--;
+                break;
+            case "right":
+                head.x++;
+                break;
         }
-      } else {
-        if (gameInterval.current) clearInterval(gameInterval.current)
-        return { ...prev, gameStarted: false, gameOver: true }
-      }
-    })
+
+        if (
+            head.x >= 0 &&
+            head.x < 24 &&
+            head.y >= 0 &&
+            head.y < 40 &&
+            !newSnake.find((segment) => segment.x === head.x && segment.y === head.y)
+        ) {
+            newSnake.unshift(head);
+
+            if (head.x === prev.food.x && head.y === prev.food.y) {
+                const newScore = prev.score + 1;
+                if (newScore === prev.totalFood) {
+                    if (gameInterval.current) clearInterval(gameInterval.current);
+                    return {
+                        ...prev,
+                        snake: newSnake,
+                        score: newScore,
+                        food: { x: null, y: null },
+                        gameOver: true,
+                        gameStarted: false,
+                    };
+                } else {
+                    return {
+                        ...prev,
+                        snake: newSnake,
+                        score: newScore,
+                        food: { x: Math.floor(Math.random() * 24), y: Math.floor(Math.random() * 40) },
+                    };
+                }
+            } else {
+                newSnake.pop();
+                return { ...prev, snake: newSnake };
+            }
+        } else {
+            if (gameInterval.current) clearInterval(gameInterval.current);
+            return { ...prev, gameStarted: false, gameOver: true };
+        }
+    });
   }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-teal-900 to-teal-400/20">
-      <div className="w-[530px] h-[475px] border border-black flex items-center justify-between bg-gradient-to-b from-teal-800 to-teal-400/20 rounded-lg p-8 relative lg:w-[420px] lg:h-[370px] lg:p-6">
+      <div className="w-[630px] h-[575px] border border-black flex items-center justify-between bg-gradient-to-b from-teal-800 to-teal-400/20 rounded-lg p-8 relative lg:w-[530px] lg:h-[475px] lg:p-6">
         <img
-          src="/icons/bolt-up-left.svg"
+          src="/icons/console/bolt-up-left.svg"
           alt=""
-          className="absolute top-2 left-2 opacity-70 w-6 h-6 lg:w-5 lg:h-5"
+          className="absolute top-2 left-2 opacity-70 w-8 h-8 lg:w-6 lg:h-6"
         />
         <img
-          src="/icons/bolt-up-right.svg"
+          src="/icons/console/bolt-up-right.svg"
           alt=""
-          className="absolute top-2 right-2 opacity-70 w-6 h-6 lg:w-5 lg:h-5"
+          className="absolute top-2 right-2 opacity-70 w-8 h-8 lg:w-6 lg:h-6"
         />
         <img
-          src="/icons/bolt-down-left.svg"
+          src="/icons/console/bolt-down-left.svg"
           alt=""
-          className="absolute bottom-2 left-2 opacity-70 w-6 h-6 lg:w-5 lg:h-5"
+          className="absolute bottom-2 left-2 opacity-70 w-8 h-8 lg:w-6 lg:h-6"
         />
         <img
-          src="/icons/bolt-down-right.svg"
+          src="/icons/console/bolt-down-right.svg"
           alt=""
-          className="absolute bottom-2 right-2 opacity-70 w-6 h-6 lg:w-5 lg:h-5"
+          className="absolute bottom-2 right-2 opacity-70 w-8 h-8 lg:w-6 lg:h-6"
         />
 
         <GameScreen gameState={gameState} />
@@ -193,26 +196,25 @@ export default function SnakeGame() {
             <ControlPanel onMove={(direction) => setGameState((prev) => ({ ...prev, direction }))} />
             <ScoreBoard score={gameState.score} />
           </div>
-          {/*Removed skip button */}
         </div>
 
         {!gameState.gameStarted && !gameState.gameOver && (
           <button
             onClick={startGame}
-            className="absolute bottom-[15%] left-[17%] bg-[#FEA55F] text-black rounded-lg px-4 py-2 text-sm hover:bg-[#ffb277] lg:text-xs lg:px-3 lg:py-1.5 lg:rounded-md" //Updated button position
+            className="absolute bottom-[15%] left-[17%] bg-[#FEA55F] text-black rounded-lg px-6 py-3 text-base hover:bg-[#ffb277] lg:text-sm lg:px-4 lg:py-2 lg:rounded-md"
           >
             start-game
           </button>
         )}
 
         {gameState.gameOver && (
-          <div className="absolute bottom-[12%] text-[#43D9AD] w-60 lg:w-48 lg:bottom-[10%]">
-            <span className="font-fira_retina bg-[#011627] h-12 flex items-center justify-center text-2xl lg:text-lg">
+          <div className="absolute bottom-[12%] text-[#43D9AD] w-72 lg:w-60 lg:bottom-[10%]">
+            <span className="font-fira_retina bg-[#011627] h-16 flex items-center justify-center text-3xl lg:text-2xl lg:h-12">
               {gameState.score === gameState.totalFood ? "WELL DONE!" : "GAME OVER!"}
             </span>
             <button
               onClick={startAgain}
-              className="font-fira_retina text-[#607B96] text-sm flex items-center justify-center w-full py-6 hover:text-white"
+              className="font-fira_retina text-[#607B96] text-base flex items-center justify-center w-full py-8 hover:text-white lg:text-sm lg:py-6"
             >
               {gameState.score === gameState.totalFood ? "play-again" : "start-again"}
             </button>
