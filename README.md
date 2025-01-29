@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 2048 游戏
 
-## Getting Started
+一个使用 Next.js 和 TypeScript 开发的现代化 2048 游戏。
 
-First, run the development server:
+## 特点
 
+- 🎮 流畅的游戏体验
+- 🎯 平滑的动画效果
+- 📱 支持触屏操作
+- 💾 自动保存最高分
+- 🖥️ 响应式设计，支持移动端
+- 🎨 现代化 UI 设计
+
+## 技术栈
+
+- Next.js 14
+- TypeScript
+- Tailwind CSS
+- CSS Animations
+
+## 游戏操作
+
+### 键盘控制
+- ⬆️ 向上移动：上方向键
+- ⬇️ 向下移动：下方向键
+- ⬅️ 向左移动：左方向键
+- ➡️ 向右移动：右方向键
+
+### 触屏控制
+- 👆 上滑：向上移动
+- 👇 下滑：向下移动
+- 👈 左滑：向左移动
+- 👉 右滑：向右移动
+
+## 本地运行
+
+1. 克隆项目
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone [repository-url]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. 安装依赖
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. 启动开发服务器
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. 打开浏览器访问 `http://localhost:3000`
 
-## Learn More
+## 游戏规则
 
-To learn more about Next.js, take a look at the following resources:
+1. 使用方向键或滑动操作移动方块
+2. 相同数字的方块相撞时会合并成为它们的和
+3. 每次移动后会在空位置随机出现一个新的数字（2或4）
+4. 当方块到达2048时获胜
+5. 当无法进行有效移动时游戏结束
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 项目结构
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+├── app/
+│   ├── components/    # 游戏组件
+│   ├── types/        # TypeScript 类型定义
+│   ├── globals.css   # 全局样式
+│   └── page.tsx      # 主页面
+├── public/           # 静态资源
+└── package.json      # 项目配置
+```
 
-## Deploy on Vercel
+## 贡献
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+欢迎提交 Issue 和 Pull Request！
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 许可
+
+MIT License
