@@ -1,17 +1,14 @@
-export type Direction = "up" | "down" | "left" | "right"
+export type Cell = number | null;
 
-export interface Position {
-  x: number
-  y: number
-}
+export type Grid = Cell[][];
 
 export interface GameState {
-  score: number
-  gameStarted: boolean
-  gameOver: boolean
-  food: Position
-  snake: Position[]
-  direction: Direction
-  totalFood: number
+    grid: Grid;
+    score: number;
+    highScore: number;
+    gameOver: boolean;
+    won: boolean;
 }
+
+export type Direction = 'up' | 'down' | 'left' | 'right';
 
