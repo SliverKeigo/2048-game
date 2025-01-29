@@ -53,12 +53,13 @@ const Game2048 = () => {
         let mergedPositions = new Set<string>();
 
         // 获取一行或一列的数字（去除空值）
-        const getLine = (index: number, isRow: boolean): number[] => {
-            const line: number[] = [];
+        const getLine = (index: number, isRow: boolean): { value: number, originalPos: string }[] => {
+            const line: { value: number, originalPos: string }[] = [];
             for (let i = 0; i < GRID_SIZE; i++) {
                 const value = isRow ? newGrid[index][i] : newGrid[i][index];
                 if (value !== null) {
-                    line.push(value);
+                    const pos = isRow ? `${index}-${i}` : `${i}-${index}`;
+                    line.push({ value, originalPos: pos });
                 }
             }
             return line;
@@ -66,7 +67,6 @@ const Game2048 = () => {
 
         // 设置一行或一列的值
         const setLine = (index: number, line: number[], isRow: boolean) => {
-            const newLine = Array(GRID_SIZE).fill(null);
             line.forEach((value, i) => {
                 if (isRow) {
                     newGrid[index][i] = value;
@@ -78,18 +78,16 @@ const Game2048 = () => {
 
         // 处理一行或一列
         const processLine = (index: number, isRow: boolean, isReverse: boolean) => {
-            // 获取非空值
             let line = getLine(index, isRow);
             if (line.length === 0) return;
 
-            // 如果需要反转（向右或向下移动）
             if (isReverse) {
                 line = line.reverse();
             }
 
-            // 合并相同的数字
             const merged: number[] = [];
             let skipNext = false;
+            let currentIndex = 0;
 
             for (let i = 0; i < line.length; i++) {
                 if (skipNext) {
@@ -97,40 +95,36 @@ const Game2048 = () => {
                     continue;
                 }
 
-                if (i < line.length - 1 && line[i] === line[i + 1]) {
-                    const mergedValue = line[i] * 2;
+                if (i < line.length - 1 && line[i].value === line[i + 1].value) {
+                    const mergedValue = line[i].value * 2;
                     merged.push(mergedValue);
                     newScore += mergedValue;
-                    
-                    // 计算合并后的位置
-                    let mergePos;
-                    const targetPos = merged.length - 1;
-                    if (isRow) {
-                        mergePos = `${index}-${isReverse ? GRID_SIZE - 1 - targetPos : targetPos}`;
-                    } else {
-                        mergePos = `${isReverse ? GRID_SIZE - 1 - targetPos : targetPos}-${index}`;
-                    }
-                    mergedPositions.add(mergePos);
+
+                    // 计算合并位置
+                    const targetPos = isRow ? 
+                        `${index}-${isReverse ? GRID_SIZE - 1 - currentIndex : currentIndex}` :
+                        `${isReverse ? GRID_SIZE - 1 - currentIndex : currentIndex}-${index}`;
+
+                    // 标记两个原始位置都会移动到目标位置
+                    mergedPositions.add(targetPos);
                     
                     skipNext = true;
                     moved = true;
                 } else {
-                    merged.push(line[i]);
+                    merged.push(line[i].value);
                 }
+                currentIndex++;
             }
 
-            // 获取当前行/列的原始数据（包括null）
             const originalLine = Array(GRID_SIZE).fill(null).map((_, i) => 
                 isRow ? newGrid[index][i] : newGrid[i][index]
             );
 
-            // 准备新的行/列数据
             const finalLine = merged.concat(Array(GRID_SIZE - merged.length).fill(null));
             if (isReverse) {
                 finalLine.reverse();
             }
 
-            // 检查是否有变化
             const hasChanged = originalLine.some((val, i) => val !== finalLine[i]);
             if (hasChanged) {
                 moved = true;
@@ -394,4 +388,4 @@ const Game2048 = () => {
     );
 };
 
-export default Game2048; 
+export default Game2048;           

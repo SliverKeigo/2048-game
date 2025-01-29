@@ -62,6 +62,10 @@ body {
     opacity: 0;
     transform: scale(0);
   }
+  60% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
   100% {
     opacity: 1;
     transform: scale(1);
@@ -71,10 +75,11 @@ body {
 @keyframes merge {
   0% {
     transform: scale(1);
+    filter: brightness(1);
   }
-  50% {
-    transform: scale(1.2);
-    filter: brightness(1.3);
+  60% {
+    transform: scale(1.25);
+    filter: brightness(1.5);
   }
   100% {
     transform: scale(1);
@@ -169,31 +174,31 @@ body {
   font-size: 2rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 1;
-  transition: transform 0.15s ease-in-out, filter 0.15s ease-in-out;
-  will-change: transform, filter;
+  transition: transform 0.2s ease-out;
+  will-change: transform;
 }
 
 .new-cell {
-  animation: pop 0.3s ease-in-out forwards;
+  animation: appear 0.2s ease-out;
 }
 
 .merged-cell {
-  animation: merge 0.3s ease-in-out forwards;
+  animation: merge 0.2s ease-out;
   z-index: 2;
 }
 
 /* 为不同数值的方块添加不同的合并效果 */
-.cell[class*="bg-[#f2b179]"].merged-cell,
-.cell[class*="bg-[#f59563]"].merged-cell,
-.cell[class*="bg-[#f67c5f]"].merged-cell,
-.cell[class*="bg-[#f65e3b]"].merged-cell {
-  box-shadow: 0 0 20px rgba(246, 94, 59, 0.4);
+.cell.merged-cell[class*="bg-[#f2b179]"],
+.cell.merged-cell[class*="bg-[#f59563]"],
+.cell.merged-cell[class*="bg-[#f67c5f]"],
+.cell.merged-cell[class*="bg-[#f65e3b]"] {
+  box-shadow: 0 0 30px rgba(246, 94, 59, 0.6);
 }
 
-.cell[class*="bg-[#edcf72]"].merged-cell,
-.cell[class*="bg-[#edcc61]"].merged-cell,
-.cell[class*="bg-[#edc850]"].merged-cell {
-  box-shadow: 0 0 20px rgba(237, 204, 97, 0.4);
+.cell.merged-cell[class*="bg-[#edcf72]"],
+.cell.merged-cell[class*="bg-[#edcc61]"],
+.cell.merged-cell[class*="bg-[#edc850]"] {
+  box-shadow: 0 0 30px rgba(237, 204, 97, 0.6);
 }
 
 /* 数字大小动态调整 */
