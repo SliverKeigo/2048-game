@@ -54,6 +54,8 @@ const Game2048 = () => {
         if (typeof window !== 'undefined') {
             // 使用在线音效
             mergeSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3');
+            // 使用本地音效
+            // mergeSound.current = new Audio('/sounds/merge.mp3');
             // 预加载音效
             mergeSound.current.load();
             // 设置音量
