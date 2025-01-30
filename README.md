@@ -36,7 +36,7 @@
 
 1. 克隆项目
 ```bash
-git clone [repository-url]
+git clone https://github.com/SliverKeigo/2048-game.git
 ```
 
 2. 安装依赖

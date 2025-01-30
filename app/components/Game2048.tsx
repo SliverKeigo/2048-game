@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { GameState, Grid, Direction } from '../types/game';
 
 const GRID_SIZE = 4;
@@ -43,6 +43,44 @@ const Game2048 = () => {
     const [positions, setPositions] = useState<{ [key: string]: { x: number, y: number } }>({});
     const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
 
+    const mergeSound = useRef<HTMLAudioElement | null>(null);
+    
+    const [soundEnabled, setSoundEnabled] = useState<boolean>(
+        typeof window !== 'undefined' ? localStorage.getItem('soundEnabled') !== 'false' : true
+    );
+
+    useEffect(() => {
+        // 初始化音效
+        if (typeof window !== 'undefined') {
+            // 使用在线音效
+            mergeSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3');
+            // 预加载音效
+            mergeSound.current.load();
+            // 设置音量
+            mergeSound.current.volume = 0.2;
+        }
+    }, []);
+
+    const toggleSound = () => {
+        const newSoundEnabled = !soundEnabled;
+        setSoundEnabled(newSoundEnabled);
+        localStorage.setItem('soundEnabled', newSoundEnabled.toString());
+    };
+
+    const playMergeSound = () => {
+        if (mergeSound.current && soundEnabled) {
+            if (!mergeSound.current.paused) {
+                mergeSound.current.currentTime = 0;
+            }
+            const playPromise = mergeSound.current.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.log('音效播放失败:', error);
+                });
+            }
+        }
+    };
+
     const moveGrid = (direction: Direction) => {
         setLastMove(direction);
         setMergedCells(new Set());
@@ -51,6 +89,7 @@ const Game2048 = () => {
         let newScore = gameState.score;
         let moved = false;
         let mergedPositions = new Set<string>();
+        let hasMerged = false;  // 添加标记来追踪是否发生合并
 
         // 获取一行或一列的数字（去除空值）
         const getLine = (index: number, isRow: boolean): { value: number, originalPos: string }[] => {
@@ -99,6 +138,7 @@ const Game2048 = () => {
                     const mergedValue = line[i].value * 2;
                     merged.push(mergedValue);
                     newScore += mergedValue;
+                    hasMerged = true;  // 标记发生了合并
 
                     // 计算合并位置
                     const targetPos = isRow ? 
@@ -144,6 +184,10 @@ const Game2048 = () => {
         }
 
         if (moved) {
+            if (hasMerged) {
+                playMergeSound();  // 如果发生了合并，播放音效
+            }
+
             const oldGrid = newGrid.map(row => [...row]);
             newGrid = addRandomCell(newGrid);
             
@@ -322,6 +366,18 @@ const Game2048 = () => {
                 </div>
             </div>
 
+            <div className="flex gap-4 mb-4">
+                <button onClick={resetGame} className="restart-button">
+                    重新开始
+                </button>
+                <button 
+                    onClick={toggleSound} 
+                    className={`restart-button flex items-center gap-2 ${!soundEnabled ? 'opacity-50' : ''}`}
+                >
+                    {soundEnabled ? '🔊 音效开启' : '🔈 音效关闭'}
+                </button>
+            </div>
+
             <div 
                 className="game-container touch-none"
                 onTouchStart={handleTouchStart}
@@ -366,14 +422,8 @@ const Game2048 = () => {
                 </div>
             </div>
 
-            <div className="mt-8">
-                <button onClick={resetGame} className="restart-button">
-                    重新开始
-                </button>
-            </div>
-
             {(gameState.gameOver || gameState.won) && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white p-8 rounded-lg text-center">
                         <h3 className="text-2xl font-bold mb-4">
                             {gameState.won ? '恭喜你赢了！' : '游戏结束！'}
