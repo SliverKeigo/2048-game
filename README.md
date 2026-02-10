@@ -78,3 +78,10 @@ npm run dev
 ## 许可
 
 MIT License
+
+## 音效资源
+
+- 合并音效：`public/sounds/merge-confirmation.wav`
+- 来源：Kenney - Interface Sounds
+- 许可：CC0 1.0（可免费用于个人/教育/商业项目）
+- 许可文件：`public/sounds/KENNEY-LICENSE.txt`
