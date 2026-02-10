@@ -7,25 +7,40 @@ export default function Home() {
   const [gameStarted, setGameStarted] = useState(false);
 
   if (gameStarted) {
-    return <Game2048 />;
+    return (
+      <main className="app-background">
+        <div className="ambient-orb orb-a" aria-hidden="true" />
+        <div className="ambient-orb orb-b" aria-hidden="true" />
+        <Game2048 onExit={() => setGameStarted(false)} />
+      </main>
+    );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-6xl font-bold mb-8 text-gray-800">2048</h1>
-        <p className="text-xl text-gray-600 mb-8">
-          使用方向键移动方块，相同数字的方块会合并。<br />
-          达到2048就算胜利！
-        </p>
-        <button
-          onClick={() => setGameStarted(true)}
-          className="px-8 py-4 bg-blue-500 text-white text-xl rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          开始游戏
-        </button>
+    <main className="app-background">
+      <div className="ambient-orb orb-a" aria-hidden="true" />
+      <div className="ambient-orb orb-b" aria-hidden="true" />
+      <div className="hero-shell">
+        <section className="hero-card">
+          <p className="hero-eyebrow">Number Fusion</p>
+          <h1 className="hero-title">2048</h1>
+          <p className="hero-description">
+            滑动方块，连续合成更大的数字。每一次移动都要预判下一步，尽量保持棋盘空间。
+          </p>
+          <button type="button" onClick={() => setGameStarted(true)} className="hero-cta">
+            开始挑战
+          </button>
+        </section>
+        <section className="hero-sidecard" aria-label="玩法提示">
+          <h2>玩法规则</h2>
+          <ul>
+            <li>方向键或滑动控制所有方块移动</li>
+            <li>相同数字碰撞会自动合并并得分</li>
+            <li>每回合会随机出现 2 或 4</li>
+            <li>合成到 2048 即达成目标</li>
+          </ul>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
-

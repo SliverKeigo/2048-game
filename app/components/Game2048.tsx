@@ -1,443 +1,524 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
-import { GameState, Grid, Direction } from '../types/game';
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  Home,
+  RefreshCw,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Direction, GameState, Grid } from '../types/game';
 
 const GRID_SIZE = 4;
 const WINNING_NUMBER = 2048;
+const HIGH_SCORE_KEY = 'highScore';
+const SOUND_KEY = 'soundEnabled';
+const SWIPE_THRESHOLD = 40;
 
-const getInitialGrid = (): Grid => {
-    const grid: Grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
-    return addRandomCell(addRandomCell(grid));
+type MoveResult = {
+  grid: Grid;
+  moved: boolean;
+  scoreGain: number;
+  mergedCells: Set<string>;
 };
 
-const addRandomCell = (grid: Grid): Grid => {
-    const emptyCells = [];
-    for (let i = 0; i < GRID_SIZE; i++) {
-        for (let j = 0; j < GRID_SIZE; j++) {
-            if (grid[i][j] === null) {
-                emptyCells.push({ i, j });
-            }
-        }
+type AddRandomCellResult = {
+  grid: Grid;
+  newCell: string | null;
+};
+
+type Game2048Props = {
+  onExit?: () => void;
+};
+
+const cloneGrid = (grid: Grid): Grid => grid.map((row) => [...row]);
+
+const createEmptyGrid = (): Grid =>
+  Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+
+const getStoredHighScore = (): number => {
+  if (typeof window === 'undefined') return 0;
+  const value = Number(window.localStorage.getItem(HIGH_SCORE_KEY));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
+const addRandomCell = (grid: Grid): AddRandomCellResult => {
+  const emptyCells: Array<{ row: number; col: number }> = [];
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      if (grid[row][col] === null) {
+        emptyCells.push({ row, col });
+      }
     }
-    if (emptyCells.length === 0) return grid;
+  }
 
-    const { i, j } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-    const newGrid = grid.map(row => [...row]);
-    newGrid[i][j] = Math.random() < 0.9 ? 2 : 4;
-    return newGrid;
+  if (emptyCells.length === 0) {
+    return { grid, newCell: null };
+  }
+
+  const pick = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+  const nextGrid = cloneGrid(grid);
+  nextGrid[pick.row][pick.col] = Math.random() < 0.9 ? 2 : 4;
+
+  return {
+    grid: nextGrid,
+    newCell: `${pick.row}-${pick.col}`,
+  };
 };
 
-const Game2048 = () => {
-    const [gameState, setGameState] = useState<GameState>({
-        grid: getInitialGrid(),
-        score: 0,
-        highScore: typeof window !== 'undefined' ? Number(localStorage.getItem('highScore')) || 0 : 0,
-        gameOver: false,
-        won: false
+const createInitialGrid = (): Grid => {
+  const first = addRandomCell(createEmptyGrid());
+  const second = addRandomCell(first.grid);
+  return second.grid;
+};
+
+const isGameOver = (grid: Grid): boolean => {
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      const current = grid[row][col];
+      if (current === null) return false;
+      if (col < GRID_SIZE - 1 && grid[row][col + 1] === current) return false;
+      if (row < GRID_SIZE - 1 && grid[row + 1][col] === current) return false;
+    }
+  }
+  return true;
+};
+
+const computeMove = (grid: Grid, direction: Direction): MoveResult => {
+  const nextGrid = cloneGrid(grid);
+  const mergedCells = new Set<string>();
+  const isHorizontal = direction === 'left' || direction === 'right';
+  const isReverse = direction === 'right' || direction === 'down';
+
+  let moved = false;
+  let scoreGain = 0;
+
+  const getLine = (index: number): Array<{ value: number; row: number; col: number }> => {
+    const items: Array<{ value: number; row: number; col: number }> = [];
+    for (let offset = 0; offset < GRID_SIZE; offset += 1) {
+      const row = isHorizontal ? index : offset;
+      const col = isHorizontal ? offset : index;
+      const value = nextGrid[row][col];
+      if (value !== null) {
+        items.push({ value, row, col });
+      }
+    }
+    return items;
+  };
+
+  const setLine = (index: number, values: Array<number | null>) => {
+    for (let offset = 0; offset < GRID_SIZE; offset += 1) {
+      const row = isHorizontal ? index : offset;
+      const col = isHorizontal ? offset : index;
+      nextGrid[row][col] = values[offset];
+    }
+  };
+
+  for (let index = 0; index < GRID_SIZE; index += 1) {
+    let items = getLine(index);
+    if (isReverse) items = items.reverse();
+    if (items.length === 0) continue;
+
+    const mergedValues: number[] = [];
+    let writeIndex = 0;
+
+    for (let pointer = 0; pointer < items.length; pointer += 1) {
+      const current = items[pointer];
+      const next = items[pointer + 1];
+      if (next && next.value === current.value) {
+        const merged = current.value * 2;
+        mergedValues.push(merged);
+        scoreGain += merged;
+
+        const targetIndex = isReverse ? GRID_SIZE - 1 - writeIndex : writeIndex;
+        const row = isHorizontal ? index : targetIndex;
+        const col = isHorizontal ? targetIndex : index;
+        mergedCells.add(`${row}-${col}`);
+
+        writeIndex += 1;
+        pointer += 1;
+      } else {
+        mergedValues.push(current.value);
+        writeIndex += 1;
+      }
+    }
+
+    const filledLine: Array<number | null> = mergedValues.concat(
+      Array(GRID_SIZE - mergedValues.length).fill(null),
+    );
+    const finalLine = isReverse ? [...filledLine].reverse() : filledLine;
+
+    const previousLine = Array.from({ length: GRID_SIZE }, (_, offset) => {
+      const row = isHorizontal ? index : offset;
+      const col = isHorizontal ? offset : index;
+      return grid[row][col];
     });
 
-    const [lastMove, setLastMove] = useState<Direction | null>(null);
-    const [mergedCells, setMergedCells] = useState<Set<string>>(new Set());
-    const [newCells, setNewCells] = useState<Set<string>>(new Set());
-    const [positions, setPositions] = useState<{ [key: string]: { x: number, y: number } }>({});
-    const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+    if (previousLine.some((value, offset) => value !== finalLine[offset])) {
+      moved = true;
+    }
 
-    const mergeSound = useRef<HTMLAudioElement | null>(null);
-    
-    const [soundEnabled, setSoundEnabled] = useState<boolean>(
-        typeof window !== 'undefined' ? localStorage.getItem('soundEnabled') !== 'false' : true
-    );
+    setLine(index, finalLine);
+  }
 
-    useEffect(() => {
-        // 初始化音效
-        if (typeof window !== 'undefined') {
-            // 使用在线音效
-            mergeSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3');
-            // 使用本地音效
-            // mergeSound.current = new Audio('/sounds/merge.mp3');
-            // 预加载音效
-            mergeSound.current.load();
-            // 设置音量
-            mergeSound.current.volume = 0.2;
-        }
-    }, []);
-
-    const toggleSound = () => {
-        const newSoundEnabled = !soundEnabled;
-        setSoundEnabled(newSoundEnabled);
-        localStorage.setItem('soundEnabled', newSoundEnabled.toString());
-    };
-
-    const playMergeSound = () => {
-        if (mergeSound.current && soundEnabled) {
-            if (!mergeSound.current.paused) {
-                mergeSound.current.currentTime = 0;
-            }
-            const playPromise = mergeSound.current.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.log('音效播放失败:', error);
-                });
-            }
-        }
-    };
-
-    const moveGrid = (direction: Direction) => {
-        setLastMove(direction);
-        setMergedCells(new Set());
-        setNewCells(new Set());
-        let newGrid = gameState.grid.map(row => [...row]);
-        let newScore = gameState.score;
-        let moved = false;
-        let mergedPositions = new Set<string>();
-        let hasMerged = false;  // 添加标记来追踪是否发生合并
-
-        // 获取一行或一列的数字（去除空值）
-        const getLine = (index: number, isRow: boolean): { value: number, originalPos: string }[] => {
-            const line: { value: number, originalPos: string }[] = [];
-            for (let i = 0; i < GRID_SIZE; i++) {
-                const value = isRow ? newGrid[index][i] : newGrid[i][index];
-                if (value !== null) {
-                    const pos = isRow ? `${index}-${i}` : `${i}-${index}`;
-                    line.push({ value, originalPos: pos });
-                }
-            }
-            return line;
-        };
-
-        // 设置一行或一列的值
-        const setLine = (index: number, line: number[], isRow: boolean) => {
-            line.forEach((value, i) => {
-                if (isRow) {
-                    newGrid[index][i] = value;
-                } else {
-                    newGrid[i][index] = value;
-                }
-            });
-        };
-
-        // 处理一行或一列
-        const processLine = (index: number, isRow: boolean, isReverse: boolean) => {
-            let line = getLine(index, isRow);
-            if (line.length === 0) return;
-
-            if (isReverse) {
-                line = line.reverse();
-            }
-
-            const merged: number[] = [];
-            let skipNext = false;
-            let currentIndex = 0;
-
-            for (let i = 0; i < line.length; i++) {
-                if (skipNext) {
-                    skipNext = false;
-                    continue;
-                }
-
-                if (i < line.length - 1 && line[i].value === line[i + 1].value) {
-                    const mergedValue = line[i].value * 2;
-                    merged.push(mergedValue);
-                    newScore += mergedValue;
-                    hasMerged = true;  // 标记发生了合并
-
-                    // 计算合并位置
-                    const targetPos = isRow ? 
-                        `${index}-${isReverse ? GRID_SIZE - 1 - currentIndex : currentIndex}` :
-                        `${isReverse ? GRID_SIZE - 1 - currentIndex : currentIndex}-${index}`;
-
-                    // 标记两个原始位置都会移动到目标位置
-                    mergedPositions.add(targetPos);
-                    
-                    skipNext = true;
-                    moved = true;
-                } else {
-                    merged.push(line[i].value);
-                }
-                currentIndex++;
-            }
-
-            const originalLine = Array(GRID_SIZE).fill(null).map((_, i) => 
-                isRow ? newGrid[index][i] : newGrid[i][index]
-            );
-
-            const finalLine = merged.concat(Array(GRID_SIZE - merged.length).fill(null));
-            if (isReverse) {
-                finalLine.reverse();
-            }
-
-            const hasChanged = originalLine.some((val, i) => val !== finalLine[i]);
-            if (hasChanged) {
-                moved = true;
-                setLine(index, finalLine, isRow);
-            }
-        };
-
-        // 根据方向处理每一行或列
-        if (direction === 'left' || direction === 'right') {
-            for (let row = 0; row < GRID_SIZE; row++) {
-                processLine(row, true, direction === 'right');
-            }
-        } else {
-            for (let col = 0; col < GRID_SIZE; col++) {
-                processLine(col, false, direction === 'down');
-            }
-        }
-
-        if (moved) {
-            if (hasMerged) {
-                playMergeSound();  // 如果发生了合并，播放音效
-            }
-
-            const oldGrid = newGrid.map(row => [...row]);
-            newGrid = addRandomCell(newGrid);
-            
-            // 找出新添加的单元格位置
-            const newCellPositions = new Set<string>();
-            newGrid.forEach((row, i) => {
-                row.forEach((cell, j) => {
-                    if (cell !== null && oldGrid[i][j] === null) {
-                        newCellPositions.add(`${i}-${j}`);
-                    }
-                });
-            });
-
-            setMergedCells(mergedPositions);
-            setNewCells(newCellPositions);
-
-            const newHighScore = Math.max(newScore, gameState.highScore);
-            if (newHighScore > gameState.highScore) {
-                localStorage.setItem('highScore', newHighScore.toString());
-            }
-
-            setGameState(prev => ({
-                ...prev,
-                grid: newGrid,
-                score: newScore,
-                highScore: newHighScore,
-                won: newGrid.some(row => row.some(cell => cell === WINNING_NUMBER)),
-                gameOver: isGameOver(newGrid)
-            }));
-        }
-    };
-
-    const isGameOver = (grid: Grid): boolean => {
-        // 检查是否还有空格
-        if (grid.some(row => row.some(cell => cell === null))) return false;
-
-        // 检查是否还能合并
-        for (let i = 0; i < GRID_SIZE; i++) {
-            for (let j = 0; j < GRID_SIZE; j++) {
-                const current = grid[i][j];
-                // 检查右边
-                if (j < GRID_SIZE - 1 && grid[i][j + 1] === current) return false;
-                // 检查下边
-                if (i < GRID_SIZE - 1 && grid[i + 1][j] === current) return false;
-            }
-        }
-        return true;
-    };
-
-    const resetGame = () => {
-        setGameState({
-            grid: getInitialGrid(),
-            score: 0,
-            highScore: gameState.highScore,
-            gameOver: false,
-            won: false
-        });
-    };
-
-    const handleTouchStart = (e: React.TouchEvent) => {
-        const touch = e.touches[0];
-        setTouchStart({ x: touch.clientX, y: touch.clientY });
-    };
-
-    const handleTouchEnd = (e: React.TouchEvent) => {
-        if (!touchStart) return;
-        
-        const touch = e.changedTouches[0];
-        const deltaX = touch.clientX - touchStart.x;
-        const deltaY = touch.clientY - touchStart.y;
-        const minSwipeDistance = 50; // 最小滑动距离
-
-        if (Math.abs(deltaX) < minSwipeDistance && Math.abs(deltaY) < minSwipeDistance) {
-            return;
-        }
-
-        if (Math.abs(deltaX) > Math.abs(deltaY)) {
-            // 水平滑动
-            if (deltaX > 0) {
-                moveGrid('right');
-            } else {
-                moveGrid('left');
-            }
-        } else {
-            // 垂直滑动
-            if (deltaY > 0) {
-                moveGrid('down');
-            } else {
-                moveGrid('up');
-            }
-        }
-
-        setTouchStart(null);
-    };
-
-    const handleTouchCancel = () => {
-        setTouchStart(null);
-    };
-
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (gameState.gameOver) return;
-
-            switch (event.key) {
-                case 'ArrowUp':
-                    moveGrid('up');
-                    break;
-                case 'ArrowDown':
-                    moveGrid('down');
-                    break;
-                case 'ArrowLeft':
-                    moveGrid('left');
-                    break;
-                case 'ArrowRight':
-                    moveGrid('right');
-                    break;
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [gameState]);
-
-    useEffect(() => {
-        // 初始化位置
-        const newPositions: { [key: string]: { x: number, y: number } } = {};
-        gameState.grid.forEach((row, i) => {
-            row.forEach((cell, j) => {
-                if (cell) {
-                    newPositions[`${i}-${j}`] = { x: j, y: i };
-                }
-            });
-        });
-        setPositions(newPositions);
-    }, [gameState.grid]);
-
-    const getTransform = (i: number, j: number) => {
-        const key = `${i}-${j}`;
-        const pos = positions[key];
-        if (!pos) return 'translate(0, 0)';
-        const x = (j - pos.x) * 100;
-        const y = (i - pos.y) * 100;
-        return `translate(${x}%, ${y}%)`;
-    };
-
-    const getCellColor = (value: number | null): string => {
-        if (!value) return 'bg-gray-200';
-        const colors: { [key: number]: string } = {
-            2: 'bg-[#eee4da] text-[#776e65]',
-            4: 'bg-[#ede0c8] text-[#776e65]',
-            8: 'bg-[#f2b179] text-[#f9f6f2]',
-            16: 'bg-[#f59563] text-[#f9f6f2]',
-            32: 'bg-[#f67c5f] text-[#f9f6f2]',
-            64: 'bg-[#f65e3b] text-[#f9f6f2]',
-            128: 'bg-[#edcf72] text-[#f9f6f2] text-[1.75rem]',
-            256: 'bg-[#edcc61] text-[#f9f6f2] text-[1.75rem]',
-            512: 'bg-[#edc850] text-[#f9f6f2] text-[1.75rem]',
-            1024: 'bg-[#edc53f] text-[#f9f6f2] text-[1.5rem]',
-            2048: 'bg-[#edc22e] text-[#f9f6f2] text-[1.5rem]'
-        };
-        return colors[value] || 'bg-[#3c3a32] text-[#f9f6f2]';
-    };
-
-    return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4">
-            <h1 className="game-title">2048</h1>
-            
-            <div className="flex gap-4 mb-4">
-                <div className="score-container">
-                    <div className="score-title">分数</div>
-                    <div className="score-number">{gameState.score}</div>
-                </div>
-                <div className="score-container">
-                    <div className="score-title">最高分</div>
-                    <div className="score-number">{gameState.highScore}</div>
-                </div>
-            </div>
-
-            <div className="flex gap-4 mb-4">
-                <button onClick={resetGame} className="restart-button">
-                    重新开始
-                </button>
-                <button 
-                    onClick={toggleSound} 
-                    className={`restart-button flex items-center gap-2 ${!soundEnabled ? 'opacity-50' : ''}`}
-                >
-                    {soundEnabled ? '🔊 音效开启' : '🔈 音效关闭'}
-                </button>
-            </div>
-
-            <div 
-                className="game-container touch-none"
-                onTouchStart={handleTouchStart}
-                onTouchEnd={handleTouchEnd}
-                onTouchCancel={handleTouchCancel}
-            >
-                <div className="game-grid">
-                    {/* 背景网格 */}
-                    {Array.from({ length: 16 }).map((_, i) => (
-                        <div key={`bg-${i}`} className="grid-cell"></div>
-                    ))}
-                </div>
-                
-                {/* 数字方块 */}
-                <div className="absolute inset-[0.75rem]">
-                    {gameState.grid.map((row, i) => (
-                        row.map((cell, j) => (
-                            <div
-                                key={`${i}-${j}`}
-                                className="absolute"
-                                style={{
-                                    top: `calc(${i} * (var(--cell-size) + var(--cell-gap)))`,
-                                    left: `calc(${j} * (var(--cell-size) + var(--cell-gap)))`,
-                                }}
-                            >
-                                {cell && (
-                                    <div
-                                        style={{
-                                            transform: getTransform(i, j),
-                                        }}
-                                        className={`cell
-                                            ${getCellColor(cell)}
-                                            ${mergedCells.has(`${i}-${j}`) ? 'merged-cell' : ''}
-                                            ${newCells.has(`${i}-${j}`) ? 'new-cell' : ''}`}
-                                    >
-                                        {cell}
-                                    </div>
-                                )}
-                            </div>
-                        ))
-                    ))}
-                </div>
-            </div>
-
-            {(gameState.gameOver || gameState.won) && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white p-8 rounded-lg text-center">
-                        <h3 className="text-2xl font-bold mb-4">
-                            {gameState.won ? '恭喜你赢了！' : '游戏结束！'}
-                        </h3>
-                        <button onClick={resetGame} className="restart-button">
-                            再玩一次
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+  return { grid: nextGrid, moved, scoreGain, mergedCells };
 };
 
-export default Game2048;           
+const getTileClassName = (value: number): string => {
+  if (value <= 2048) return `tile-${value}`;
+  return 'tile-super';
+};
+
+const getTileScaleClass = (value: number): string => {
+  if (value >= 1024) return 'tile-sm';
+  if (value >= 128) return 'tile-md';
+  return '';
+};
+
+const Game2048 = ({ onExit }: Game2048Props) => {
+  const [gameState, setGameState] = useState<GameState>(() => ({
+    grid: createInitialGrid(),
+    score: 0,
+    highScore: getStoredHighScore(),
+    gameOver: false,
+    won: false,
+  }));
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem(SOUND_KEY) !== 'false';
+  });
+  const [moves, setMoves] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('使用方向键或滑动开始合成');
+  const [newCells, setNewCells] = useState<Set<string>>(new Set());
+  const [mergedCells, setMergedCells] = useState<Set<string>>(new Set());
+  const [boardPulse, setBoardPulse] = useState(0);
+  const [showWinModal, setShowWinModal] = useState(false);
+  const [lastDirection, setLastDirection] = useState<Direction | null>(null);
+
+  const gameStateRef = useRef(gameState);
+  const mergeSoundRef = useRef<HTMLAudioElement | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(HIGH_SCORE_KEY, String(gameState.highScore));
+  }, [gameState.highScore]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SOUND_KEY, String(soundEnabled));
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    const sound = new Audio('/sounds/merge-confirmation.wav');
+    sound.preload = 'auto';
+    sound.volume = 0.14;
+    mergeSoundRef.current = sound;
+    sound.load();
+
+    return () => {
+      sound.pause();
+      mergeSoundRef.current = null;
+    };
+  }, []);
+
+  const playMergeSound = useCallback(() => {
+    if (!soundEnabled || !mergeSoundRef.current) return;
+    if (!mergeSoundRef.current.paused) {
+      mergeSoundRef.current.currentTime = 0;
+    }
+    mergeSoundRef.current.play().catch(() => {
+      // 浏览器自动播放策略可能阻止首次播放，静默失败即可。
+    });
+  }, [soundEnabled]);
+
+  const resetGame = useCallback(() => {
+    const currentHighScore = gameStateRef.current.highScore;
+    const nextState: GameState = {
+      grid: createInitialGrid(),
+      score: 0,
+      highScore: currentHighScore,
+      gameOver: false,
+      won: false,
+    };
+    gameStateRef.current = nextState;
+    setGameState(nextState);
+    setMoves(0);
+    setStatusMessage('新局开始，祝你合成顺利');
+    setNewCells(new Set());
+    setMergedCells(new Set());
+    setShowWinModal(false);
+    setLastDirection(null);
+  }, []);
+
+  const moveGrid = useCallback(
+    (direction: Direction) => {
+      const current = gameStateRef.current;
+      if (current.gameOver) return;
+
+      const moveResult = computeMove(current.grid, direction);
+      if (!moveResult.moved) {
+        setStatusMessage('这个方向无法移动');
+        return;
+      }
+
+      const randomResult = addRandomCell(moveResult.grid);
+      const nextScore = current.score + moveResult.scoreGain;
+      const nextHighScore = Math.max(current.highScore, nextScore);
+      const reached2048 = randomResult.grid.some((row) => row.some((cell) => cell === WINNING_NUMBER));
+      const won = current.won || reached2048;
+      const gameOver = isGameOver(randomResult.grid);
+
+      const nextState: GameState = {
+        grid: randomResult.grid,
+        score: nextScore,
+        highScore: nextHighScore,
+        won,
+        gameOver,
+      };
+
+      gameStateRef.current = nextState;
+      setGameState(nextState);
+      setMoves((value) => value + 1);
+      setMergedCells(moveResult.mergedCells);
+      setNewCells(randomResult.newCell ? new Set([randomResult.newCell]) : new Set());
+      setLastDirection(direction);
+      setBoardPulse((value) => value + 1);
+
+      if (moveResult.scoreGain > 0) {
+        playMergeSound();
+      }
+
+      if (reached2048 && !current.won) {
+        setShowWinModal(true);
+        setStatusMessage('已达成 2048，可以继续挑战更高分');
+        return;
+      }
+      if (gameOver) {
+        setStatusMessage('没有可移动方块了');
+        return;
+      }
+      if (nextHighScore > current.highScore) {
+        setStatusMessage(`新纪录 ${nextHighScore}`);
+        return;
+      }
+      if (moveResult.scoreGain > 0) {
+        setStatusMessage(`合并得分 +${moveResult.scoreGain}`);
+        return;
+      }
+      setStatusMessage('移动成功');
+    },
+    [playMergeSound],
+  );
+
+  useEffect(() => {
+    const keyToDirection: Record<string, Direction> = {
+      ArrowUp: 'up',
+      ArrowDown: 'down',
+      ArrowLeft: 'left',
+      ArrowRight: 'right',
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const direction = keyToDirection[event.key];
+      if (!direction) return;
+      event.preventDefault();
+      moveGrid(direction);
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { passive: false });
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [moveGrid]);
+
+  const handleTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      if (!touchStartRef.current) return;
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - touchStartRef.current.x;
+      const deltaY = touch.clientY - touchStartRef.current.y;
+      touchStartRef.current = null;
+
+      if (Math.abs(deltaX) < SWIPE_THRESHOLD && Math.abs(deltaY) < SWIPE_THRESHOLD) return;
+
+      if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        moveGrid(deltaX > 0 ? 'right' : 'left');
+      } else {
+        moveGrid(deltaY > 0 ? 'down' : 'up');
+      }
+    },
+    [moveGrid],
+  );
+
+  const directionLabel = useMemo(() => {
+    if (!lastDirection) return '未操作';
+    const labels: Record<Direction, string> = {
+      up: '上',
+      down: '下',
+      left: '左',
+      right: '右',
+    };
+    return labels[lastDirection];
+  }, [lastDirection]);
+
+  return (
+    <section className="game-shell">
+      <header className="game-header">
+        <div>
+          <p className="game-eyebrow">PUZZLE MODE</p>
+          <h1 className="game-title">2048</h1>
+          <p className="game-subtitle">合并相同数字，冲击更高分</p>
+        </div>
+        <div className="score-grid">
+          <article className="score-card">
+            <p className="score-label">分数</p>
+            <p className="score-value">{gameState.score}</p>
+          </article>
+          <article className="score-card">
+            <p className="score-label">最高分</p>
+            <p className="score-value">{gameState.highScore}</p>
+          </article>
+          <article className="score-card">
+            <p className="score-label">步数</p>
+            <p className="score-value">{moves}</p>
+          </article>
+        </div>
+      </header>
+
+      <div className="control-row">
+        <button type="button" className="control-btn primary" onClick={resetGame}>
+          <RefreshCw size={16} />
+          重新开始
+        </button>
+        <button
+          type="button"
+          className="control-btn"
+          onClick={() => setSoundEnabled((enabled) => !enabled)}
+          aria-pressed={soundEnabled}
+        >
+          {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          {soundEnabled ? '音效开启' : '音效关闭'}
+        </button>
+        {onExit && (
+          <button type="button" className="control-btn ghost" onClick={onExit}>
+            <Home size={16} />
+            返回首页
+          </button>
+        )}
+      </div>
+
+      <div className="status-row">
+        <p className="status-chip" role="status" aria-live="polite">
+          {statusMessage}
+        </p>
+        <p className="direction-chip">上次方向: {directionLabel}</p>
+      </div>
+
+      <div
+        className={`game-container ${boardPulse % 2 === 0 ? '' : 'board-pulse'}`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={() => {
+          touchStartRef.current = null;
+        }}
+        aria-label="2048 游戏棋盘"
+      >
+        <div className="game-grid" aria-hidden="true">
+          {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, index) => (
+            <div key={index} className="grid-cell" />
+          ))}
+        </div>
+
+        <div className="tile-layer">
+          {gameState.grid.map((row, rowIndex) =>
+            row.map((cell, colIndex) => {
+              if (cell === null) return null;
+              const key = `${rowIndex}-${colIndex}`;
+              return (
+                <div
+                  key={key}
+                  className="tile-slot"
+                  style={{
+                    top: `calc(${rowIndex} * (var(--cell-size) + var(--cell-gap)))`,
+                    left: `calc(${colIndex} * (var(--cell-size) + var(--cell-gap)))`,
+                  }}
+                >
+                  <div
+                    className={[
+                      'tile',
+                      getTileClassName(cell),
+                      getTileScaleClass(cell),
+                      newCells.has(key) ? 'new-cell' : '',
+                      mergedCells.has(key) ? 'merged-cell' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    {cell}
+                  </div>
+                </div>
+              );
+            }),
+          )}
+        </div>
+      </div>
+
+      <div className="help-panel">
+        <p className="help-title">操作提示</p>
+        <div className="help-grid">
+          <span>
+            <ArrowUp size={14} />
+            <ArrowDown size={14} />
+            <ArrowLeft size={14} />
+            <ArrowRight size={14} />
+            键盘方向键
+          </span>
+          <span>移动端可在棋盘区域滑动操作</span>
+          <span>目标: 合成 2048，继续挑战更高数字</span>
+        </div>
+      </div>
+
+      {(gameState.gameOver || showWinModal) && (
+        <div className="result-overlay">
+          <div className="result-modal">
+            <p className="result-tag">{gameState.gameOver ? '挑战结束' : '达成目标'}</p>
+            <h2>{gameState.gameOver ? '没有可移动方块了' : '你已经合成 2048'}</h2>
+            <p>当前分数 {gameState.score}</p>
+            <div className="result-actions">
+              <button type="button" className="control-btn primary" onClick={resetGame}>
+                <RefreshCw size={16} />
+                再来一局
+              </button>
+              {!gameState.gameOver && (
+                <button
+                  type="button"
+                  className="control-btn"
+                  onClick={() => {
+                    setShowWinModal(false);
+                    setStatusMessage('继续冲击更高分');
+                  }}
+                >
+                  继续挑战
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};
+
+export default Game2048;

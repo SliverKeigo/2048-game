@@ -1,20 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const mapleMono = localFont({
+  src: "../MapleMono-NF-CN-Regular.ttf",
+  variable: "--font-maple-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "2048-GAME",
-  description: "2048-GAME",
+  title: "2048 - Number Fusion",
+  description: "A smoother 2048 experience with improved UI, UX and tactile feedback.",
 };
 
 export default function RootLayout({
@@ -23,10 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="zh-CN">
+      <body className={`${mapleMono.variable} antialiased`}>
         {children}
       </body>
     </html>
