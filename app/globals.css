@@ -3,9 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --cell-size: 5.5rem;
-  --cell-gap: 0.75rem;
-  --grid-size: calc(var(--cell-size) * 4 + var(--cell-gap) * 5);
+  --cell-gap: clamp(0.45rem, 1.7vw, 0.75rem);
+  --grid-max-size: 25.75rem;
+  --grid-size: min(92vw, var(--grid-max-size));
+  --cell-size: calc((var(--grid-size) - (var(--cell-gap) * 5)) / 4);
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
@@ -62,7 +63,8 @@ button:focus-visible {
 .app-background {
   position: relative;
   min-height: 100vh;
-  padding: var(--space-xl) var(--space-md);
+  padding: clamp(1rem, 3vw, 2rem) clamp(0.85rem, 3.4vw, 1.4rem);
+  padding-bottom: calc(clamp(1rem, 3vw, 2rem) + env(safe-area-inset-bottom));
   overflow: hidden;
 }
 
@@ -92,7 +94,7 @@ button:focus-visible {
 .hero-shell {
   position: relative;
   z-index: 1;
-  max-width: 980px;
+  width: min(100%, 980px);
   margin: 0 auto;
   min-height: calc(100vh - var(--space-xxl));
   display: grid;
@@ -139,6 +141,7 @@ button:focus-visible {
   border: 0;
   border-radius: 999px;
   padding: 0.8rem 1.6rem;
+  min-height: 44px;
   color: #1f1100;
   background: linear-gradient(125deg, var(--accent), var(--accent-strong));
   font-weight: 700;
@@ -172,7 +175,7 @@ button:focus-visible {
 .game-shell {
   position: relative;
   z-index: 1;
-  max-width: 980px;
+  width: min(100%, 1080px);
   margin: 0 auto;
   display: grid;
   gap: var(--space-md);
@@ -181,6 +184,21 @@ button:focus-visible {
 .game-header {
   display: grid;
   gap: var(--space-md);
+}
+
+.playfield-layout {
+  display: grid;
+  gap: var(--space-md);
+  align-items: start;
+}
+
+.playfield-main {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.playfield-aside {
+  display: grid;
 }
 
 .game-eyebrow {
@@ -204,8 +222,12 @@ button:focus-visible {
 
 .score-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-sm);
+}
+
+.score-card:last-child {
+  grid-column: 1 / -1;
 }
 
 .score-card {
@@ -242,6 +264,7 @@ button:focus-visible {
   background: var(--surface);
   color: var(--text);
   padding: 0.58rem 0.95rem;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -279,14 +302,17 @@ button:focus-visible {
   background: var(--surface);
   padding: 0.4rem 0.85rem;
   font-size: 0.82rem;
+  max-width: 100%;
 }
 
 .status-chip {
   color: var(--accent-cool);
+  flex: 1 1 17rem;
 }
 
 .direction-chip {
   color: var(--text-soft);
+  flex: 0 0 auto;
 }
 
 .game-container {
@@ -294,7 +320,7 @@ button:focus-visible {
   width: var(--grid-size);
   height: var(--grid-size);
   max-width: 100%;
-  margin: 0;
+  margin: 0 auto;
   background: var(--board-color);
   border-radius: var(--radius-md);
   border: 1px solid rgba(184, 215, 255, 0.2);
@@ -340,18 +366,18 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 1.95rem;
+  font-size: clamp(1.25rem, calc(var(--cell-size) * 0.38), 1.95rem);
   transition: transform 170ms cubic-bezier(0.2, 0.9, 0.2, 1);
   box-shadow: 0 12px 18px rgba(5, 12, 22, 0.18);
   color: #1b1b1b;
 }
 
 .tile-md {
-  font-size: 1.62rem;
+  font-size: clamp(1.05rem, calc(var(--cell-size) * 0.31), 1.62rem);
 }
 
 .tile-sm {
-  font-size: 1.28rem;
+  font-size: clamp(0.92rem, calc(var(--cell-size) * 0.25), 1.28rem);
 }
 
 .tile-2 {
@@ -425,6 +451,8 @@ button:focus-visible {
   border: 1px solid var(--line);
   background: var(--surface);
   padding: 0.85rem 1rem;
+  width: min(100%, var(--grid-size));
+  margin: 0 auto;
 }
 
 .help-title {
@@ -444,6 +472,8 @@ button:focus-visible {
 .help-grid span {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  line-height: 1.5;
   gap: 0.4rem;
   color: #d3def6;
   font-size: 0.86rem;
@@ -529,32 +559,66 @@ button:focus-visible {
   }
 }
 
-@media (max-width: 900px) {
-  :root {
-    --cell-size: 4.75rem;
+@media (min-width: 768px) {
+  .score-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .score-card:last-child {
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 960px) {
+  .hero-shell {
+    grid-template-columns: minmax(0, 1.15fr) minmax(16rem, 0.85fr);
+    align-items: center;
+  }
+}
+
+@media (min-width: 1024px) {
+  .playfield-layout {
+    grid-template-columns: minmax(0, var(--grid-size)) minmax(16rem, 1fr);
+    column-gap: clamp(1rem, 2.2vw, 1.8rem);
+  }
+
+  .playfield-main {
+    max-width: var(--grid-size);
+  }
+
+  .help-panel {
+    width: 100%;
+    max-width: 26rem;
+    margin: 0;
+    height: fit-content;
   }
 }
 
 @media (max-width: 640px) {
-  :root {
-    --cell-size: 4.25rem;
-    --cell-gap: 0.5rem;
-  }
-
-  .app-background {
-    padding-top: var(--space-lg);
-  }
-
   .hero-shell {
     min-height: auto;
   }
 
-  .score-grid {
+  .hero-title {
+    font-size: clamp(2.8rem, 19vw, 4.2rem);
+  }
+
+  .control-row {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .game-container {
-    margin: 0 auto;
+  .control-row .control-btn.primary {
+    grid-column: 1 / -1;
+  }
+
+  .control-btn {
+    justify-content: center;
+  }
+
+  .status-chip,
+  .direction-chip {
+    width: 100%;
   }
 }
 

@@ -397,97 +397,103 @@ const Game2048 = ({ onExit }: Game2048Props) => {
         </div>
       </header>
 
-      <div className="control-row">
-        <button type="button" className="control-btn primary" onClick={resetGame}>
-          <RefreshCw size={16} />
-          重新开始
-        </button>
-        <button
-          type="button"
-          className="control-btn"
-          onClick={() => setSoundEnabled((enabled) => !enabled)}
-          aria-pressed={soundEnabled}
-        >
-          {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-          {soundEnabled ? '音效开启' : '音效关闭'}
-        </button>
-        {onExit && (
-          <button type="button" className="control-btn ghost" onClick={onExit}>
-            <Home size={16} />
-            返回首页
-          </button>
-        )}
-      </div>
+      <div className="playfield-layout">
+        <div className="playfield-main">
+          <div className="control-row">
+            <button type="button" className="control-btn primary" onClick={resetGame}>
+              <RefreshCw size={16} />
+              重新开始
+            </button>
+            <button
+              type="button"
+              className="control-btn"
+              onClick={() => setSoundEnabled((enabled) => !enabled)}
+              aria-pressed={soundEnabled}
+            >
+              {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              {soundEnabled ? '音效开启' : '音效关闭'}
+            </button>
+            {onExit && (
+              <button type="button" className="control-btn ghost" onClick={onExit}>
+                <Home size={16} />
+                返回首页
+              </button>
+            )}
+          </div>
 
-      <div className="status-row">
-        <p className="status-chip" role="status" aria-live="polite">
-          {statusMessage}
-        </p>
-        <p className="direction-chip">上次方向: {directionLabel}</p>
-      </div>
+          <div className="status-row">
+            <p className="status-chip" role="status" aria-live="polite">
+              {statusMessage}
+            </p>
+            <p className="direction-chip">上次方向: {directionLabel}</p>
+          </div>
 
-      <div
-        className={`game-container ${boardPulse % 2 === 0 ? '' : 'board-pulse'}`}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={() => {
-          touchStartRef.current = null;
-        }}
-        aria-label="2048 游戏棋盘"
-      >
-        <div className="game-grid" aria-hidden="true">
-          {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, index) => (
-            <div key={index} className="grid-cell" />
-          ))}
+          <div
+            className={`game-container ${boardPulse % 2 === 0 ? '' : 'board-pulse'}`}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={() => {
+              touchStartRef.current = null;
+            }}
+            aria-label="2048 游戏棋盘"
+          >
+            <div className="game-grid" aria-hidden="true">
+              {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, index) => (
+                <div key={index} className="grid-cell" />
+              ))}
+            </div>
+
+            <div className="tile-layer">
+              {gameState.grid.map((row, rowIndex) =>
+                row.map((cell, colIndex) => {
+                  if (cell === null) return null;
+                  const key = `${rowIndex}-${colIndex}`;
+                  return (
+                    <div
+                      key={key}
+                      className="tile-slot"
+                      style={{
+                        top: `calc(${rowIndex} * (var(--cell-size) + var(--cell-gap)))`,
+                        left: `calc(${colIndex} * (var(--cell-size) + var(--cell-gap)))`,
+                      }}
+                    >
+                      <div
+                        className={[
+                          'tile',
+                          getTileClassName(cell),
+                          getTileScaleClass(cell),
+                          newCells.has(key) ? 'new-cell' : '',
+                          mergedCells.has(key) ? 'merged-cell' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        {cell}
+                      </div>
+                    </div>
+                  );
+                }),
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="tile-layer">
-          {gameState.grid.map((row, rowIndex) =>
-            row.map((cell, colIndex) => {
-              if (cell === null) return null;
-              const key = `${rowIndex}-${colIndex}`;
-              return (
-                <div
-                  key={key}
-                  className="tile-slot"
-                  style={{
-                    top: `calc(${rowIndex} * (var(--cell-size) + var(--cell-gap)))`,
-                    left: `calc(${colIndex} * (var(--cell-size) + var(--cell-gap)))`,
-                  }}
-                >
-                  <div
-                    className={[
-                      'tile',
-                      getTileClassName(cell),
-                      getTileScaleClass(cell),
-                      newCells.has(key) ? 'new-cell' : '',
-                      mergedCells.has(key) ? 'merged-cell' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  >
-                    {cell}
-                  </div>
-                </div>
-              );
-            }),
-          )}
-        </div>
-      </div>
-
-      <div className="help-panel">
-        <p className="help-title">操作提示</p>
-        <div className="help-grid">
-          <span>
-            <ArrowUp size={14} />
-            <ArrowDown size={14} />
-            <ArrowLeft size={14} />
-            <ArrowRight size={14} />
-            键盘方向键
-          </span>
-          <span>移动端可在棋盘区域滑动操作</span>
-          <span>目标: 合成 2048，继续挑战更高数字</span>
-        </div>
+        <aside className="playfield-aside" aria-label="操作帮助">
+          <div className="help-panel">
+            <p className="help-title">操作提示</p>
+            <div className="help-grid">
+              <span>
+                <ArrowUp size={14} />
+                <ArrowDown size={14} />
+                <ArrowLeft size={14} />
+                <ArrowRight size={14} />
+                键盘方向键
+              </span>
+              <span>移动端可在棋盘区域滑动操作</span>
+              <span>目标: 合成 2048，继续挑战更高数字</span>
+            </div>
+          </div>
+        </aside>
       </div>
 
       {(gameState.gameOver || showWinModal) && (
