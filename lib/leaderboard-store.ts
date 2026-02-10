@@ -26,9 +26,23 @@ type MemoryStore = {
   challengeSeeds: Map<string, string>;
 };
 
-const KV_URL = process.env.KV_REST_API_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN;
-const hasRedis = Boolean(KV_URL && KV_TOKEN);
+const KV_URL =
+  process.env.KV_REST_API_URL ??
+  process.env.REDIS_URL ??
+  process.env.REDIS_REST_URL ??
+  process.env.redis_url;
+const KV_TOKEN =
+  process.env.KV_REST_API_TOKEN ??
+  process.env.REDIS_TOKEN ??
+  process.env.redis_token ??
+  process.env.KV_REST_API_READ_ONLY_TOKEN;
+const hasRedisRestConfig = Boolean(KV_URL && KV_TOKEN);
+const hasRedisUrlScheme = typeof KV_URL === 'string' && /^https?:\/\//.test(KV_URL);
+const hasRedis = hasRedisRestConfig && hasRedisUrlScheme;
+
+if (hasRedisRestConfig && !hasRedisUrlScheme) {
+  console.warn('Redis is configured with a non-REST URL. Falling back to in-memory leaderboard store.');
+}
 
 const kv = hasRedis
   ? createClient({
