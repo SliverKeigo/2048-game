@@ -11,12 +11,20 @@ import {
   VolumeX,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  DailyChallenge,
+  GameMode,
+  LeaderboardScope,
+  LeaderboardSnapshot,
+} from '../types/leaderboard';
 import { Direction, GameState, Grid } from '../types/game';
 
 const GRID_SIZE = 4;
 const WINNING_NUMBER = 2048;
 const HIGH_SCORE_KEY = 'highScore';
 const SOUND_KEY = 'soundEnabled';
+const PLAYER_ID_KEY = 'playerId';
+const PLAYER_NAME_KEY = 'playerName';
 const SWIPE_THRESHOLD = 40;
 
 type MoveResult = {
@@ -31,8 +39,12 @@ type AddRandomCellResult = {
   newCell: string | null;
 };
 
+type RandomFn = () => number;
+
 type Game2048Props = {
   onExit?: () => void;
+  mode?: GameMode;
+  challenge?: DailyChallenge | null;
 };
 
 const cloneGrid = (grid: Grid): Grid => grid.map((row) => [...row]);
@@ -46,7 +58,54 @@ const getStoredHighScore = (): number => {
   return Number.isFinite(value) && value > 0 ? value : 0;
 };
 
-const addRandomCell = (grid: Grid): AddRandomCellResult => {
+const buildPlayerId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const getStoredPlayerId = (): string => {
+  if (typeof window === 'undefined') return 'server-player';
+
+  const current = window.localStorage.getItem(PLAYER_ID_KEY);
+  if (current && current.length >= 6) {
+    return current;
+  }
+
+  const next = buildPlayerId();
+  window.localStorage.setItem(PLAYER_ID_KEY, next);
+  return next;
+};
+
+const getStoredPlayerName = (): string => {
+  if (typeof window === 'undefined') return '';
+  return window.localStorage.getItem(PLAYER_NAME_KEY) ?? '';
+};
+
+const defaultPlayerName = (playerId: string): string => `Player-${playerId.slice(-4).toUpperCase()}`;
+
+const hashSeed = (seed: string): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const createSeededRandom = (seed: string): RandomFn => {
+  let state = hashSeed(seed);
+  return () => {
+    state += 0x6d2b79f5;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const addRandomCell = (grid: Grid, randomFn: RandomFn): AddRandomCellResult => {
   const emptyCells: Array<{ row: number; col: number }> = [];
   for (let row = 0; row < GRID_SIZE; row += 1) {
     for (let col = 0; col < GRID_SIZE; col += 1) {
@@ -60,9 +119,9 @@ const addRandomCell = (grid: Grid): AddRandomCellResult => {
     return { grid, newCell: null };
   }
 
-  const pick = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+  const pick = emptyCells[Math.floor(randomFn() * emptyCells.length)];
   const nextGrid = cloneGrid(grid);
-  nextGrid[pick.row][pick.col] = Math.random() < 0.9 ? 2 : 4;
+  nextGrid[pick.row][pick.col] = randomFn() < 0.9 ? 2 : 4;
 
   return {
     grid: nextGrid,
@@ -70,9 +129,9 @@ const addRandomCell = (grid: Grid): AddRandomCellResult => {
   };
 };
 
-const createInitialGrid = (): Grid => {
-  const first = addRandomCell(createEmptyGrid());
-  const second = addRandomCell(first.grid);
+const createInitialGrid = (randomFn: RandomFn): Grid => {
+  const first = addRandomCell(createEmptyGrid(), randomFn);
+  const second = addRandomCell(first.grid, randomFn);
   return second.grid;
 };
 
@@ -179,29 +238,62 @@ const getTileScaleClass = (value: number): string => {
   return '';
 };
 
-const Game2048 = ({ onExit }: Game2048Props) => {
-  const [gameState, setGameState] = useState<GameState>(() => ({
-    grid: createInitialGrid(),
-    score: 0,
-    highScore: getStoredHighScore(),
-    gameOver: false,
-    won: false,
-  }));
+const Game2048 = ({ onExit, mode = 'classic', challenge = null }: Game2048Props) => {
+  const challengeSeed = mode === 'daily' ? challenge?.seed ?? '' : '';
+  const isDailyMode = mode === 'daily' && Boolean(challengeSeed);
+
+  const randomRef = useRef<RandomFn>(Math.random);
+
+  const resetRandomSource = useCallback(() => {
+    randomRef.current = isDailyMode ? createSeededRandom(challengeSeed) : Math.random;
+  }, [challengeSeed, isDailyMode]);
+
+  const createFreshGameState = useCallback(
+    (highScore: number): GameState => {
+      resetRandomSource();
+      return {
+        grid: createInitialGrid(randomRef.current),
+        score: 0,
+        highScore,
+        gameOver: false,
+        won: false,
+      };
+    },
+    [resetRandomSource],
+  );
+
+  const [gameState, setGameState] = useState<GameState>(() => createFreshGameState(getStoredHighScore()));
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     return window.localStorage.getItem(SOUND_KEY) !== 'false';
   });
   const [moves, setMoves] = useState(0);
-  const [statusMessage, setStatusMessage] = useState('使用方向键或滑动开始合成');
+  const [statusMessage, setStatusMessage] = useState(
+    isDailyMode ? '每日挑战已开始，使用方向键或滑动合成' : '使用方向键或滑动开始合成',
+  );
   const [newCells, setNewCells] = useState<Set<string>>(new Set());
   const [mergedCells, setMergedCells] = useState<Set<string>>(new Set());
   const [boardPulse, setBoardPulse] = useState(0);
   const [showWinModal, setShowWinModal] = useState(false);
   const [lastDirection, setLastDirection] = useState<Direction | null>(null);
+  const [submittedCurrentRound, setSubmittedCurrentRound] = useState(false);
+
+  const [playerId] = useState<string>(() => getStoredPlayerId());
+  const [playerName, setPlayerName] = useState<string>(() => getStoredPlayerName());
+
+  const [leaderboard, setLeaderboard] = useState<LeaderboardSnapshot | null>(null);
+  const [activeScope, setActiveScope] = useState<LeaderboardScope>(isDailyMode ? 'challenge' : 'all');
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardMessage, setLeaderboardMessage] = useState('');
+  const [submittingScore, setSubmittingScore] = useState(false);
 
   const gameStateRef = useRef(gameState);
   const mergeSoundRef = useRef<HTMLAudioElement | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    setActiveScope(isDailyMode ? 'challenge' : 'all');
+  }, [isDailyMode]);
 
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -218,6 +310,11 @@ const Game2048 = ({ onExit }: Game2048Props) => {
   }, [soundEnabled]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(PLAYER_NAME_KEY, playerName.trim());
+  }, [playerName]);
+
+  useEffect(() => {
     const sound = new Audio('/sounds/merge-confirmation.wav');
     sound.preload = 'auto';
     sound.volume = 0.14;
@@ -230,34 +327,110 @@ const Game2048 = ({ onExit }: Game2048Props) => {
     };
   }, []);
 
+  const displayPlayerName = useMemo(
+    () => (playerName.trim() ? playerName.trim() : defaultPlayerName(playerId)),
+    [playerId, playerName],
+  );
+
+  const refreshLeaderboard = useCallback(async () => {
+    setLeaderboardLoading(true);
+    setLeaderboardMessage('');
+
+    try {
+      const query = new URLSearchParams();
+      query.set('limit', '8');
+      if (challenge?.id) {
+        query.set('challengeId', challenge.id);
+      }
+
+      const response = await fetch(`/api/leaderboard?${query.toString()}`, {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load leaderboard');
+      }
+
+      const payload = (await response.json()) as LeaderboardSnapshot;
+      setLeaderboard(payload);
+    } catch {
+      setLeaderboardMessage('排行榜加载失败，请稍后重试。');
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }, [challenge?.id]);
+
+  useEffect(() => {
+    void refreshLeaderboard();
+  }, [refreshLeaderboard]);
+
   const playMergeSound = useCallback(() => {
     if (!soundEnabled || !mergeSoundRef.current) return;
     if (!mergeSoundRef.current.paused) {
       mergeSoundRef.current.currentTime = 0;
     }
     mergeSoundRef.current.play().catch(() => {
-      // 浏览器自动播放策略可能阻止首次播放，静默失败即可。
+      // Browser autoplay policies may block initial playback.
     });
   }, [soundEnabled]);
 
   const resetGame = useCallback(() => {
-    const currentHighScore = gameStateRef.current.highScore;
-    const nextState: GameState = {
-      grid: createInitialGrid(),
-      score: 0,
-      highScore: currentHighScore,
-      gameOver: false,
-      won: false,
-    };
+    const nextState = createFreshGameState(gameStateRef.current.highScore);
     gameStateRef.current = nextState;
     setGameState(nextState);
     setMoves(0);
-    setStatusMessage('新局开始，祝你合成顺利');
+    setStatusMessage(isDailyMode ? '每日挑战新局开始，祝你上榜' : '新局开始，祝你合成顺利');
     setNewCells(new Set());
     setMergedCells(new Set());
     setShowWinModal(false);
     setLastDirection(null);
-  }, []);
+    setSubmittedCurrentRound(false);
+    setLeaderboardMessage('');
+  }, [createFreshGameState, isDailyMode]);
+
+  const submitScore = useCallback(async () => {
+    if (submittedCurrentRound || gameStateRef.current.score <= 0) {
+      return;
+    }
+
+    setSubmittingScore(true);
+
+    try {
+      const response = await fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          playerId,
+          name: displayPlayerName,
+          score: gameStateRef.current.score,
+          moves,
+          mode: isDailyMode ? 'daily' : 'classic',
+          challengeId: challenge?.id ?? null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit score');
+      }
+
+      const payload = (await response.json()) as LeaderboardSnapshot;
+      setLeaderboard(payload);
+      setSubmittedCurrentRound(true);
+      setLeaderboardMessage('成绩已提交，排行榜已更新。');
+    } catch {
+      setLeaderboardMessage('成绩提交失败，请稍后重试。');
+    } finally {
+      setSubmittingScore(false);
+    }
+  }, [challenge?.id, displayPlayerName, isDailyMode, moves, playerId, submittedCurrentRound]);
+
+  useEffect(() => {
+    if ((gameState.gameOver || showWinModal) && !submittedCurrentRound && gameState.score > 0) {
+      void submitScore();
+    }
+  }, [gameState.gameOver, gameState.score, showWinModal, submitScore, submittedCurrentRound]);
 
   const moveGrid = useCallback(
     (direction: Direction) => {
@@ -270,7 +443,7 @@ const Game2048 = ({ onExit }: Game2048Props) => {
         return;
       }
 
-      const randomResult = addRandomCell(moveResult.grid);
+      const randomResult = addRandomCell(moveResult.grid, randomRef.current);
       const nextScore = current.score + moveResult.scoreGain;
       const nextHighScore = Math.max(current.highScore, nextScore);
       const reached2048 = randomResult.grid.some((row) => row.some((cell) => cell === WINNING_NUMBER));
@@ -373,13 +546,37 @@ const Game2048 = ({ onExit }: Game2048Props) => {
     return labels[lastDirection];
   }, [lastDirection]);
 
+  const scopeTabs = useMemo(
+    () => [
+      { key: 'all' as const, label: '总榜' },
+      { key: 'daily' as const, label: '今日' },
+      { key: 'weekly' as const, label: '本周' },
+      ...(isDailyMode && challenge ? ([{ key: 'challenge' as const, label: '挑战榜' }] as const) : []),
+    ],
+    [challenge, isDailyMode],
+  );
+
+  const activeEntries = useMemo(() => {
+    if (!leaderboard) return [];
+
+    if (activeScope === 'all') return leaderboard.all;
+    if (activeScope === 'daily') return leaderboard.daily;
+    if (activeScope === 'weekly') return leaderboard.weekly;
+    return leaderboard.challenge;
+  }, [activeScope, leaderboard]);
+
   return (
     <section className="game-shell">
       <header className="game-header">
         <div>
-          <p className="game-eyebrow">PUZZLE MODE</p>
+          <p className="game-eyebrow">{isDailyMode ? 'DAILY CHALLENGE' : 'PUZZLE MODE'}</p>
           <h1 className="game-title">2048</h1>
-          <p className="game-subtitle">合并相同数字，冲击更高分</p>
+          <p className="game-subtitle">
+            {isDailyMode && challenge
+              ? `每日挑战 ${challenge.date} (UTC)，与所有玩家同盘面开局`
+              : '合并相同数字，冲击更高分'}
+          </p>
+          {isDailyMode && challenge && <p className="challenge-chip">挑战编号: {challenge.id}</p>}
         </div>
         <div className="score-grid">
           <article className="score-card">
@@ -478,7 +675,7 @@ const Game2048 = ({ onExit }: Game2048Props) => {
           </div>
         </div>
 
-        <aside className="playfield-aside" aria-label="操作帮助">
+        <aside className="playfield-aside" aria-label="操作帮助与排行榜">
           <div className="help-panel">
             <p className="help-title">操作提示</p>
             <div className="help-grid">
@@ -492,6 +689,68 @@ const Game2048 = ({ onExit }: Game2048Props) => {
               <span>移动端可在棋盘区域滑动操作</span>
               <span>目标: 合成 2048，继续挑战更高数字</span>
             </div>
+          </div>
+
+          <div className="leaderboard-panel">
+            <div className="leaderboard-head">
+              <p className="help-title">排行榜</p>
+              <button
+                type="button"
+                className="leaderboard-refresh"
+                onClick={() => {
+                  void refreshLeaderboard();
+                }}
+              >
+                刷新
+              </button>
+            </div>
+
+            <label className="leaderboard-name-field" htmlFor="player-name-input">
+              昵称
+            </label>
+            <input
+              id="player-name-input"
+              className="leaderboard-name-input"
+              type="text"
+              value={playerName}
+              maxLength={24}
+              placeholder={defaultPlayerName(playerId)}
+              onChange={(event) => setPlayerName(event.target.value)}
+            />
+
+            <div className="leaderboard-tabs" role="tablist" aria-label="排行榜范围">
+              {scopeTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`leaderboard-tab ${activeScope === tab.key ? 'active' : ''}`}
+                  onClick={() => setActiveScope(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {leaderboardLoading ? (
+              <p className="leaderboard-empty">排行榜加载中...</p>
+            ) : activeEntries.length > 0 ? (
+              <ol className="leaderboard-list">
+                {activeEntries.map((entry) => (
+                  <li key={`${activeScope}-${entry.playerId}`} className="leaderboard-item">
+                    <span className="leaderboard-rank">#{entry.rank}</span>
+                    <div className="leaderboard-player">
+                      <span className="leaderboard-player-name">{entry.name}</span>
+                      <span className="leaderboard-player-meta">{entry.moves} 步</span>
+                    </div>
+                    <span className="leaderboard-score">{entry.score}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="leaderboard-empty">暂无成绩，成为第一位上榜玩家。</p>
+            )}
+
+            {leaderboardMessage && <p className="leaderboard-note">{leaderboardMessage}</p>}
           </div>
         </aside>
       </div>
@@ -519,6 +778,16 @@ const Game2048 = ({ onExit }: Game2048Props) => {
                   继续挑战
                 </button>
               )}
+              <button
+                type="button"
+                className="control-btn"
+                onClick={() => {
+                  void submitScore();
+                }}
+                disabled={submittingScore || submittedCurrentRound}
+              >
+                {submittingScore ? '提交中...' : submittedCurrentRound ? '已提交成绩' : '提交成绩'}
+              </button>
             </div>
           </div>
         </div>
